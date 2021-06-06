@@ -7,6 +7,9 @@ import org.junit.Test;
 // import org.neo4j.harness.junit.Neo4jRule;
 import org.neo4j.logging.Log;
 
+import relay.CreateConnection.ArraySliceMetaInfo;
+import relay.CreateConnection.ConnectionArguments;
+
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,14 +27,18 @@ public class CreateConnectionTest {
 
     WhoKnows nick = new WhoKnows("Nick", "yeahyeah@me.com").toObject();
 
-    List<WhoKnows> data = Arrays.asList(nick);
-    Integer count = 1;
-    Integer first = 10;
-    String after = null;
-    Integer last = null;
-    String before = null;
+    ArraySliceMetaInfo meta = connection.createMetaInfo(0, 1); 
 
-    Connection<WhoKnows> who = connection.createConnection(data, count, first, after, before, last);
+    ConnectionArguments args = connection.createConnectionArguments(
+      10, 
+      null, 
+      null, 
+      null
+    );
+
+    List<WhoKnows> data = Arrays.asList(nick);
+
+    Connection<WhoKnows> who = connection.connectionFromArraySlice(data, args, meta);
 
     System.out.println(who);
 
