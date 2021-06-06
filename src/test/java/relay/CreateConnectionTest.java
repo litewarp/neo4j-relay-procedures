@@ -19,9 +19,9 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+
 import static org.junit.Assert.assertFalse;
-import static org.neo4j.test.mockito.mock.GraphMock.*; 
-import static org.neo4j.test.mockito.mock.Properties.properties;
 // import static org.neo4j.driver.v1.Values.parameters;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -30,11 +30,12 @@ public class CreateConnectionTest {
 
   @Test
   public void shouldCreateConnection() {
-    Properties properties = properties();
 
-    long id = new Long(0);
+    Map<String,Object> nick = Map.ofEntries(
+      Map.entry("id", 123456),
+      Map.entry("name", "Nick Sethi")
+    );
 
-    Node nick = node(id, properties, "Person");
     ArraySliceMetaInfo meta = connection.createMetaInfo(0, 1); 
 
     ConnectionArguments args = connection.createConnectionArguments(
@@ -44,9 +45,9 @@ public class CreateConnectionTest {
       null
     );
 
-    List<Node> data = Arrays.asList(nick);
+    List<Map<String, Object>> data = Arrays.asList(nick);
 
-    Connection<Node> who = connection.connectionFromArraySlice(data, args, meta);
+    Connection<Map<String, Object>> who = connection.connectionFromArraySlice(data, args, meta);
 
     System.out.println(who);
 

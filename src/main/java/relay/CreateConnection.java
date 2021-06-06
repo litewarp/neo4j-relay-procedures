@@ -3,6 +3,7 @@ package relay;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static java.lang.String.format;
@@ -11,12 +12,11 @@ import static java.util.Base64.getEncoder;
 
 import org.neo4j.logging.Log;
 import org.neo4j.procedure.*;
-import org.neo4j.graphdb.Node;
 
 
 public class CreateConnection {
 
-  private String prefix = "some-prefix";
+  private static String prefix = "some-prefix";
 
   @Context
   public Log log;
@@ -62,10 +62,25 @@ public class CreateConnection {
   }
 
   public static class ConnectionOutput {
-    public Connection<Node> connection;
+    public Map<String, Object> pageInfo;
+    public List<Map<String, Object>> edges;
 
-    public ConnectionOutput(Connection<Node> connection) {
-      this.connection = connection;
+    public ConnectionOutput(Connection<Map<String, Object>> connection) {
+      this.pageInfo = Map.ofEntries(
+        Map.entry("hasNextPage", connection.getPageInfo().isHasNextPage()),
+        Map.entry("hasPreviousPage", connection.getPageInfo().isHasPreviousPage()),
+        Map.entry("startCursor", connection.getPageInfo().getStartCursor()),
+        Map.entry("endCursor", connection.getPageInfo().getEndCursor())
+      );
+      List<Edge<Map<String, Object>>> edges = connection.getEdges();
+      List<Map<String, Object>> newEdges = new ArrayList<>();
+      for (Edge<Map<String, Object>> e : edges) {
+        newEdges.add(Map.ofEntries(
+          Map.entry("cursor", e.getCursor().getValue()),
+          Map.entry("node", e.getNode())
+        ));
+      }
+      this.edges = newEdges;
     }
   }
 
@@ -82,7 +97,7 @@ public class CreateConnection {
   @Procedure(value = "relay.createConnection")
   @Description("Input a totalCount and list of edges, get a connection")
   public Stream<ConnectionOutput> createConnection(
-    @Name("arraySlice") List<Node> arraySlice, 
+    @Name("arraySlice") List<Map<String, Object>> arraySlice, 
     @Name("first") Number first,
     @Name("last") Number last,
     @Name("after") String after,
@@ -101,13 +116,13 @@ public class CreateConnection {
 
     ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, 1);
 
-    Connection<Node> connection = connectionFromArraySlice(arraySlice, args, meta);
+    Connection<Map<String, Object>> connection = connectionFromArraySlice(arraySlice, args, meta);
 
     return Stream.of(new ConnectionOutput(connection));
   }
 
-  public Connection<Node> connectionFromArraySlice(
-    List<Node> arraySlice, 
+  public Connection<Map<String, Object>> connectionFromArraySlice(
+    List<Map<String, Object>> arraySlice, 
     ConnectionArguments args,
     ArraySliceMetaInfo meta
     ) {
@@ -136,19 +151,19 @@ public class CreateConnection {
     }
 
     // if supplied slice is too large, trim it down before mapping over it.
-    List<Node> slice = arraySlice.subList(
+    List<Map<String, Object>> slice = arraySlice.subList(
       Math.max(startOffset - sliceStart, 0), 
       arraySlice.size() - (sliceEnd - endOffset)
     );
 
-    List<Edge<Node>> edges = new ArrayList<>();
+    List<Edge<Map<String, Object>>> edges = new ArrayList<>();
     int ix = 0;
-    for (Node object : slice) {
-      edges.add(new DefaultEdge<Node>(object, new DefaultConnectionCursor(offsetToCursor(ix++))));
+    for (Map<String, Object> object : slice) {
+      edges.add(new DefaultEdge<Map<String, Object>>(object, new DefaultConnectionCursor(offsetToCursor(ix++))));
     }
 
-    Edge<Node> firstEdge = edges.get(0);
-    Edge<Node> lastEdge = edges.get(edges.size() - 1);
+    Edge<Map<String, Object>> firstEdge = edges.get(0);
+    Edge<Map<String, Object>> lastEdge = edges.get(edges.size() - 1);
     Integer lowerBound = args.after != null ? afterOffset - 1 : 0;
     Integer upperBound = args.before != null ? beforeOffset : meta.totalCount;
     

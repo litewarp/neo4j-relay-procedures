@@ -9,7 +9,6 @@ import java.util.List;
  * See <a href="https://facebook.github.io/relay/graphql/connections.htm">https://facebook.github.io/relay/graphql/connections.htm</a>
  */
 public interface Connection<T> {
-
     /**
      * @return a list of {@link graphql.relay.Edge}s that are really a node of data and its cursor
      */
