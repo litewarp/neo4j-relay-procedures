@@ -60,27 +60,50 @@ public class CreateConnection {
   ) {
     return new ArraySliceMetaInfo(sliceStart, totalCount);
   }
+
+  public static class ConnectionOutput {
+    public Connection<Node> connection;
+
+    public ConnectionOutput(Connection<Node> connection) {
+      this.connection = connection;
+    }
+  }
+
+  public static class OffsetOutput {
+    public Number offset;
+
+    public OffsetOutput(Number offset) {
+      this.offset = offset;
+    }
+  }
   /**
    * 
    */
   @Procedure(value = "relay.createConnection")
   @Description("Input a totalCount and list of edges, get a connection")
-  public Stream<Connection<Node>> createConnection(
+  public Stream<ConnectionOutput> createConnection(
     @Name("arraySlice") List<Node> arraySlice, 
-    @Name("first") Integer first,
-    @Name("last") Integer last,
+    @Name("first") Number first,
+    @Name("last") Number last,
     @Name("after") String after,
     @Name("before") String before,
-    @Name("totalCount") Integer count
+    @Name("totalCount") Number count
   ) {
 
-    ConnectionArguments args = new ConnectionArguments(first, last, after, before);
+    ConnectionArguments args = new ConnectionArguments(
+      first.intValue(), 
+      last.intValue(), 
+      after, 
+      before
+    );
 
     Integer offset = cursorToOffset(after, 0);
 
     ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, 1);
 
-    return Stream.of(connectionFromArraySlice(arraySlice, args, meta));
+    Connection<Node> connection = connectionFromArraySlice(arraySlice, args, meta);
+
+    return Stream.of(new ConnectionOutput(connection));
   }
 
   public Connection<Node> connectionFromArraySlice(
@@ -172,8 +195,9 @@ public class CreateConnection {
 
   @Procedure(value = "relay.cursorToOffset")
   @Description("Enter a cursor and get an offset")
-  public Stream<Integer> getOffset (@Name("cursor") String cursor) {
-    return Stream.of(cursorToOffset(cursor, 0));
+  public Stream<OffsetOutput> getOffset (@Name("cursor") String cursor) {
+    Number offset = cursorToOffset(cursor, 0);
+    return Stream.of(new OffsetOutput(offset));
   }
 
   public String offsetToCursor(int offset) {
