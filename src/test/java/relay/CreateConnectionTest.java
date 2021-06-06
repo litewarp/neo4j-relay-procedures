@@ -2,58 +2,59 @@ package relay;
 
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
+import org.neo4j.internal.helpers.Exceptions;
 import org.junit.jupiter.api.TestInstance;
-// import org.neo4j.driver.v1.*;
-// import org.neo4j.graphqdb.factory.GraphDatabaseSettings;
-// import org.neo4j.harness.junit.Neo4jRule;
-import org.neo4j.logging.Log;
-import org.neo4j.test.mockito.mock.Properties;
-import org.neo4j.test.mockito.mock.Property;
-
-import relay.CreateConnection.ArraySliceMetaInfo;
-import relay.CreateConnection.ConnectionArguments;
-import org.neo4j.graphdb.Node;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import org.neo4j.driver.*;
+import org.neo4j.driver.Result;
+import org.neo4j.harness.*;
+import org.neo4j.harness.junit.rule.Neo4jRule;
 
 import static org.junit.Assert.assertFalse;
 // import static org.neo4j.driver.v1.Values.parameters;
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 public class CreateConnectionTest {
-  private CreateConnection connection = new CreateConnection();
+
+  @Rule
+  public Neo4jRule neo4j = new Neo4jRule().withProcedure(CreateConnection.class);
+
+  // @BeforeAll
+  // void initializeNeo4j() {
+  //   this.embeddedDatabaseServer = Neo4jBuilders.newInProcessBuilder().withDisabledServer().withProcedure(CreateConnection.class).build();
+
+  //   driver = GraphDatabase.driver(embeddedDatabaseServer.boltURI(), driverConfig);
+  // }
+
+  // @AfterAll
+  // void closeDriver() {
+  //   driver.close();
+  //   this.embeddedDatabaseServer.close();
+  // }
+
+  // @AfterEach
+  // void cleanDb() {
+  //   try(Session session = driver.session()) {
+  //     session.run("MATCH (n) DETACH DELETE n");
+  //   }
+  // }
 
   @Test
   public void shouldCreateConnection() {
+    try (Driver driver = GraphDatabase.driver(neo4j.boltURI(), Config.builder().withoutEncryption().build())) {
 
-    Map<String,Object> nick = Map.ofEntries(
-      Map.entry("id", 123456),
-      Map.entry("name", "Nick Sethi")
-    );
+      Session session = driver.session();
 
-    ArraySliceMetaInfo meta = connection.createMetaInfo(0, 1); 
+      session.run(String.format("Create (p:Person { name: 'Nick Nick' } ) RETURN p"));
+      session.run(String.format("Create (p:Person { name: 'John John' } ) RETURN p"));
+      session.run(String.format("Create (p:Person { name: 'Sam Sam' } ) RETURN p"));
 
-    ConnectionArguments args = connection.createConnectionArguments(
-      10, 
-      null, 
-      null, 
-      null
-    );
-
-    List<Map<String, Object>> data = Arrays.asList(nick);
-
-    Connection<Map<String, Object>> who = connection.connectionFromArraySlice(data, args, meta);
-
-    System.out.println(who);
-
-    Boolean hasNextPage = who.getPageInfo().isHasNextPage();
-
-    assertFalse("Error!", hasNextPage);
+      Result record = session.run("MATCH (p:Person)\nWITH COLLECT (p) as people, COUNT(p) as total\nCALL relay.createConnection(people, 10, null, null, null, total)\nYIELD edges, pageInfo\nRETURN edges, pageInfo");
+      System.out.println(record.list());
+      driver.close();
+    }
   }
 
 }

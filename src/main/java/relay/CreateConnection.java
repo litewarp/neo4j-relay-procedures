@@ -65,22 +65,9 @@ public class CreateConnection {
     public Map<String, Object> pageInfo;
     public List<Map<String, Object>> edges;
 
-    public ConnectionOutput(Connection<Map<String, Object>> connection) {
-      this.pageInfo = Map.ofEntries(
-        Map.entry("hasNextPage", connection.getPageInfo().isHasNextPage()),
-        Map.entry("hasPreviousPage", connection.getPageInfo().isHasPreviousPage()),
-        Map.entry("startCursor", connection.getPageInfo().getStartCursor()),
-        Map.entry("endCursor", connection.getPageInfo().getEndCursor())
-      );
-      List<Edge<Map<String, Object>>> edges = connection.getEdges();
-      List<Map<String, Object>> newEdges = new ArrayList<>();
-      for (Edge<Map<String, Object>> e : edges) {
-        newEdges.add(Map.ofEntries(
-          Map.entry("cursor", e.getCursor().getValue()),
-          Map.entry("node", e.getNode())
-        ));
-      }
-      this.edges = newEdges;
+    public ConnectionOutput(Map<String, Object> connection) {
+      this.pageInfo = (Map<String, Object>) connection.get("pageInfo");
+      this.edges = (List<Map<String, Object>>) connection.get("edges");
     }
   }
 
@@ -106,43 +93,43 @@ public class CreateConnection {
   ) {
 
     ConnectionArguments args = new ConnectionArguments(
-      first.intValue(), 
-      last.intValue(), 
+      first != null ? first.intValue() : null, 
+      last != null ? last.intValue() : null, 
       after, 
       before
     );
 
     Integer offset = cursorToOffset(after, 0);
 
-    ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, 1);
+    ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, count != null ? count.intValue() : 0);
 
-    Connection<Map<String, Object>> connection = connectionFromArraySlice(arraySlice, args, meta);
+    Map<String, Object> connection = connectionFromArraySlice(arraySlice, args, meta);
 
     return Stream.of(new ConnectionOutput(connection));
   }
 
-  public Connection<Map<String, Object>> connectionFromArraySlice(
+  public Map<String, Object> connectionFromArraySlice(
     List<Map<String, Object>> arraySlice, 
     ConnectionArguments args,
     ArraySliceMetaInfo meta
     ) {
-
+    
     Integer sliceStart = meta.sliceStart;
     Integer sliceEnd = sliceStart + arraySlice.size();
     Integer beforeOffset = cursorToOffset(args.before, meta.totalCount);
     Integer afterOffset = cursorToOffset(args.after, -1);
 
-    Integer startOffset = Math.max(sliceStart -1, afterOffset -1) + 1;
+    Integer startOffset = Math.max(sliceStart - 1, afterOffset - 1) + 1;
     Integer endOffset = Math.min(sliceEnd, Math.min(beforeOffset, meta.totalCount));
 
-    if (args.first instanceof Integer) {
+    if (args.first != null && args.first instanceof Integer) {
       if (args.first < 0) {
         throw new InvalidPageSizeException(format("The page size must not be negative: 'first'=%s", args.first));
       }
       endOffset = Math.min(endOffset, startOffset + args.first);
     }
 
-    if (args.last instanceof Integer) {
+    if (args.last != null && args.last instanceof Integer) {
       if (args.last < 0) {
         throw new InvalidPageSizeException(format("The page size must not be negative: 'last'=%s", args.last));
       }
@@ -150,41 +137,54 @@ public class CreateConnection {
       startOffset = Math.max(startOffset, endOffset - args.last);
     }
 
+    System.out.println("Size");
+    System.out.println(arraySlice.size());
+    System.out.println("Slice Start and End");
+    System.out.println(sliceStart);
+    System.out.println(sliceEnd);
+    System.out.println("Offset Start and End");
+    System.out.println(startOffset);
+    System.out.println(endOffset);
     // if supplied slice is too large, trim it down before mapping over it.
     List<Map<String, Object>> slice = arraySlice.subList(
       Math.max(startOffset - sliceStart, 0), 
       arraySlice.size() - (sliceEnd - endOffset)
     );
 
-    List<Edge<Map<String, Object>>> edges = new ArrayList<>();
+    List<Map<String, Object>> edges = new ArrayList<>();
     int ix = 0;
     for (Map<String, Object> object : slice) {
-      edges.add(new DefaultEdge<Map<String, Object>>(object, new DefaultConnectionCursor(offsetToCursor(ix++))));
+      edges.add(
+        Map.ofEntries(
+          Map.entry("cursor", offsetToCursor(ix++)),
+          Map.entry("node", object)
+        )
+      );
     }
 
-    Edge<Map<String, Object>> firstEdge = edges.get(0);
-    Edge<Map<String, Object>> lastEdge = edges.get(edges.size() - 1);
+    Map<String, Object> firstEdge = edges.get(0);
+    Map<String, Object> lastEdge = edges.get(edges.size() - 1);
     Integer lowerBound = args.after != null ? afterOffset - 1 : 0;
     Integer upperBound = args.before != null ? beforeOffset : meta.totalCount;
     
-    ConnectionCursor startCursor = firstEdge != null ? firstEdge.getCursor() : null;
-    ConnectionCursor endCursor = lastEdge != null ? lastEdge.getCursor() : null;
+    String startCursor = firstEdge != null ? (String) firstEdge.get("cursor") : null;
+    String endCursor = lastEdge != null ? (String) lastEdge.get("cursor") : null;
 
     Boolean hasPreviousPage = args.last instanceof Integer ? startOffset > lowerBound : false;
     Boolean hasNextPage = args.first instanceof Integer ? endOffset < upperBound : false;
 
-    PageInfo pageInfo = new DefaultPageInfo(
-      startCursor,
-      endCursor,
-      hasPreviousPage,
-      hasNextPage
+    Map<String, Object> pageInfo = Map.ofEntries(
+      Map.entry("startCursor", startCursor),
+      Map.entry("endCursor", endCursor),
+      Map.entry("hasPreviousPage", hasPreviousPage),
+      Map.entry("hasNextPage", hasNextPage)
     );
 
-    return new DefaultConnection<>(
-      edges,
-      pageInfo
+    Map<String, Object> connection = Map.ofEntries(
+      Map.entry("edges", edges),
+      Map.entry("pageInfo", pageInfo)
     );
-
+    return connection;
   }
 
   public int cursorToOffset(String cursor, int defaultValue) {
