@@ -3,15 +3,18 @@ package relay;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Stream;
+
 import static java.lang.String.format;
 import static java.util.Base64.getDecoder;
 import static java.util.Base64.getEncoder;
 
 import org.neo4j.logging.Log;
 import org.neo4j.procedure.*;
+import org.neo4j.graphdb.Node;
 
 
-public class CreateConnection<T> {
+public class CreateConnection {
 
   private String prefix = "some-prefix";
 
@@ -60,10 +63,28 @@ public class CreateConnection<T> {
   /**
    * 
    */
-  // @Procedure(value = "example.createConnection")
-  // @Description("Input a totalCount and list of edges, get a connection")
-  public Connection<T> connectionFromArraySlice(
-    List<T> arraySlice, 
+  @Procedure(value = "relay.createConnection")
+  @Description("Input a totalCount and list of edges, get a connection")
+  public Stream<Connection<Node>> createConnection(
+    @Name("arraySlice") List<Node> arraySlice, 
+    @Name("first") Integer first,
+    @Name("last") Integer last,
+    @Name("after") String after,
+    @Name("before") String before,
+    @Name("totalCount") Integer count
+  ) {
+
+    ConnectionArguments args = new ConnectionArguments(first, last, after, before);
+
+    Integer offset = cursorToOffset(after, 0);
+
+    ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, 1);
+
+    return Stream.of(connectionFromArraySlice(arraySlice, args, meta));
+  }
+
+  public Connection<Node> connectionFromArraySlice(
+    List<Node> arraySlice, 
     ConnectionArguments args,
     ArraySliceMetaInfo meta
     ) {
@@ -92,19 +113,19 @@ public class CreateConnection<T> {
     }
 
     // if supplied slice is too large, trim it down before mapping over it.
-    List<T> slice = arraySlice.subList(
+    List<Node> slice = arraySlice.subList(
       Math.max(startOffset - sliceStart, 0), 
       arraySlice.size() - (sliceEnd - endOffset)
     );
 
-    List<Edge<T>> edges = new ArrayList<>();
+    List<Edge<Node>> edges = new ArrayList<>();
     int ix = 0;
-    for (T object : slice) {
-      edges.add(new DefaultEdge<T>(object, new DefaultConnectionCursor(offsetToCursor(ix++))));
+    for (Node object : slice) {
+      edges.add(new DefaultEdge<Node>(object, new DefaultConnectionCursor(offsetToCursor(ix++))));
     }
 
-    Edge<T> firstEdge = edges.get(0);
-    Edge<T> lastEdge = edges.get(edges.size() - 1);
+    Edge<Node> firstEdge = edges.get(0);
+    Edge<Node> lastEdge = edges.get(edges.size() - 1);
     Integer lowerBound = args.after != null ? afterOffset - 1 : 0;
     Integer upperBound = args.before != null ? beforeOffset : meta.totalCount;
     
@@ -128,7 +149,7 @@ public class CreateConnection<T> {
 
   }
 
-  private int cursorToOffset(String cursor, int defaultValue) {
+  public int cursorToOffset(String cursor, int defaultValue) {
       if (cursor == null) {
           return defaultValue;
       }
@@ -149,7 +170,13 @@ public class CreateConnection<T> {
       }
   }
 
-  private String offsetToCursor(int offset) {
+  @Procedure(value = "relay.cursorToOffset")
+  @Description("Enter a cursor and get an offset")
+  public Stream<Integer> getOffset (@Name("cursor") String cursor) {
+    return Stream.of(cursorToOffset(cursor, 0));
+  }
+
+  public String offsetToCursor(int offset) {
     byte[] bytes = (prefix + Integer.toString(offset)).getBytes(StandardCharsets.UTF_8);
     return getEncoder().encodeToString(bytes);
   }
