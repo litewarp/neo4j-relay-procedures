@@ -84,13 +84,15 @@ public class CreateConnection {
   @Procedure(value = "relay.createConnection")
   @Description("Input a totalCount and list of edges, get a connection")
   public Stream<ConnectionOutput> createConnection(
-    @Name("arraySlice") List<Map<String, Object>> arraySlice, 
-    @Name("first") Number first,
-    @Name("last") Number last,
-    @Name("after") String after,
-    @Name("before") String before,
+    @Name("nodes") List<Map<String, Object>> arraySlice, 
+    @Name("arguments") Map<String,Object> arguments,
     @Name("totalCount") Number count
   ) {
+
+    Number first = (Number) arguments.get("first");
+    Number last = (Number) arguments.get("last");
+    String after = (String) arguments.get("after");
+    String before = (String) arguments.get("before");
 
     ConnectionArguments args = new ConnectionArguments(
       first != null ? first.intValue() : null, 
@@ -98,14 +100,16 @@ public class CreateConnection {
       after, 
       before
     );
+    ArraySliceMetaInfo meta = new ArraySliceMetaInfo(
+      cursorToOffset(after, 0),
+      count != null ? count.intValue() : 0
+    );
 
-    Integer offset = cursorToOffset(after, 0);
-
-    ArraySliceMetaInfo meta = new ArraySliceMetaInfo(offset, count != null ? count.intValue() : 0);
-
-    Map<String, Object> connection = connectionFromArraySlice(arraySlice, args, meta);
-
-    return Stream.of(new ConnectionOutput(connection));
+    return Stream.of(
+      new ConnectionOutput(
+        connectionFromArraySlice(arraySlice, args, meta)
+      )
+    );
   }
 
   public Map<String, Object> connectionFromArraySlice(

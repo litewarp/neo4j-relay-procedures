@@ -51,7 +51,14 @@ public class CreateConnectionTest {
       session.run(String.format("Create (p:Person { name: 'John John' } ) RETURN p"));
       session.run(String.format("Create (p:Person { name: 'Sam Sam' } ) RETURN p"));
 
-      Result record = session.run("MATCH (p:Person)\nWITH COLLECT (p) as people, COUNT(p) as total\nCALL relay.createConnection(people, 10, null, null, null, total)\nYIELD edges, pageInfo\nRETURN edges, pageInfo");
+
+      Result record = session.run(
+        "MATCH (p:Person)\n"
+        .concat("WITH COLLECT (p) as people, COUNT(p) as total\n")
+        .concat("CALL relay.createConnection(people, { first: 10, after: null }, total)\n")
+        .concat("YIELD edges, pageInfo\n")
+        .concat("RETURN edges, pageInfo")
+      );
       System.out.println(record.list());
       driver.close();
     }
